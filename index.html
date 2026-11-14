@@ -1297,7 +1297,7 @@ document.addEventListener('load', (e) => {
   if (!t || t.tagName !== 'IMG' || t.getAttribute('data-logo') !== 'trim') return;
   const show = (fit) => {
     if (fit && t.naturalWidth && t.naturalHeight) {
-      const hh = Math.max(16, Math.min(34, Math.sqrt(3400 / (t.naturalWidth / t.naturalHeight)))) * ((YH.logoScale || {})[t.getAttribute('data-air')] || 1);
+      const hh = Math.max(14, Math.min(34, Math.sqrt(2400 / (t.naturalWidth / t.naturalHeight)))) * ((YH.logoScale || {})[t.getAttribute('data-air')] || 1);
       t.style.height = Math.round(hh) + 'px';
     }
     t.style.opacity = '1';
