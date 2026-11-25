@@ -1,13 +1,13 @@
 {
-  "name": "떠나 · 같이 짜는 여행 일정",
-  "short_name": "떠나",
+  "name": "또나 · 같이 짜는 여행 일정",
+  "short_name": "또나",
   "description": "친구랑 같이 짜는 여행 일정, 가계부, 정산",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#FFFFFF",
+  "background_color": "#1F4BFF",
   "theme_color": "#FFFFFF",
   "lang": "ko",
   "icons": [

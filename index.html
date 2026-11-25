@@ -577,6 +577,7 @@
     },
     distTxt(km) {
       if (km == null || isNaN(km)) return '';
+      if (km <= 0) return '0m';
       if (km < 1) return Math.max(10, Math.round(km * 100) * 10) + 'm';
       return (km < 10 ? (Math.round(km * 10) / 10).toFixed(1) : Math.round(km)) + 'km';
     },
@@ -1781,7 +1782,26 @@ app.addEventListener('click', (e) => {
   if (bk && bk.charAt(0) === '#' && bk.length > 1 && window.__yhLeave && !e.metaKey && !e.ctrlKey) { e.preventDefault(); window.__yhLeave(bk); }
 });
 window.addEventListener('hashchange', () => go(location.hash.slice(1)));
-if (window.YH) { window.YH.init().catch((e) => console.error(e)).finally(() => go(location.hash.slice(1) || 'home')); }
+// 앱 진입: 다가오는 여행이 있으면 앱 홈 대신 그 여행의 일정 홈으로 (여행 중일 땐 홈이 여행 홈이라 그대로)
+async function yhEntry() {
+  const h = location.hash.slice(1);
+  if (h) return go(h);
+  try {
+    const Y = window.YH;
+    if (Y && Y.user && Y.profile) {
+      const trips = await Promise.race([Y.myTrips(), new Promise((r) => setTimeout(() => r(null), 2500))]);
+      const t = Y.D.today();
+      const next = (trips || []).filter((x) => Y.D.parse(x.end_date) >= t).sort((a, b) => Y.D.parse(a.start_date) - Y.D.parse(b.start_date))[0];
+      if (next && Y.D.parse(next.start_date) > t) {
+        history.replaceState(null, '', '#home');
+        history.pushState(null, '', '#trip/' + next.id);
+        return go('trip/' + next.id);
+      }
+    }
+  } catch (e) { console.error(e); }
+  go('home');
+}
+if (window.YH) { window.YH.init().catch((e) => console.error(e)).finally(yhEntry); }
 else go(location.hash.slice(1) || 'home');
 </script>
 
