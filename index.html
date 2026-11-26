@@ -531,10 +531,18 @@
     async searchPlaces(q, city) {
       const { Place } = await this.gPlaces();
       const C = this.cityInfo(city);
-      const req = { textQuery: city && !q.includes(city) ? q + ' ' + city : q, fields: ['id', 'displayName', 'formattedAddress', 'location', 'types', 'primaryType'], language: 'ko', maxResultCount: 8 };
-      if (C) req.locationBias = { lat: C.center[0], lng: C.center[1] };
-      const { places } = await Place.searchByText(req);
-      return (places || []).map((p) => ({ place_id: p.id, name: p.displayName, addr: p.formattedAddress || '', lat: p.location ? p.location.lat() : null, lng: p.location ? p.location.lng() : null, cat: '' }));
+      const run = async (text, bias) => {
+        const req = { textQuery: text, fields: ['id', 'displayName', 'formattedAddress', 'location', 'types', 'primaryType'], language: 'ko', maxResultCount: 8 };
+        if (bias) req.locationBias = { lat: bias.center[0], lng: bias.center[1] };
+        const { places } = await Place.searchByText(req);
+        return (places || []).map((p) => ({ place_id: p.id, name: p.displayName, addr: p.formattedAddress || '', lat: p.location ? p.location.lat() : null, lng: p.location ? p.location.lng() : null, cat: '' }));
+      };
+      // 여행 도시 결과를 먼저, 적게 나오면 도시 제한 없이 한 번 더 찾아 뒤에 붙임 (인천공항처럼 다른 나라 장소)
+      const inCity = !!city && !q.includes(city);
+      const first = await run(inCity ? q + ' ' + city : q, C);
+      if (!inCity || first.length >= 4) return first;
+      const more = await run(q, null).catch(() => []);
+      return first.concat(more.filter((m) => !first.some((f) => f.place_id === m.place_id)));
     },
     async placeInfo(pid) {
       const { Place } = await this.gPlaces();
