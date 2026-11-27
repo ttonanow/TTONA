@@ -593,11 +593,29 @@
       if (!this._spq[ck]) this._spq[ck] = { at: Date.now(), r };
       return r;
     },
+    // 여행 도시 나라 말 (검색어 번역용)
+    qLang(C) {
+      if (!C) return '';
+      const L = { '일본': 'ja', '베트남': 'vi', '태국': 'th', '대만': 'zh-TW', '홍콩': 'zh-TW', '마카오': 'zh-TW', '중국': 'zh-CN', '프랑스': 'fr', '스페인': 'es', '이탈리아': 'it', '독일': 'de', '오스트리아': 'de', '스위스': 'de', '포르투갈': 'pt', '체코': 'cs', '인도네시아': 'id', '말레이시아': 'ms', '한국': 'ko', '대한민국': 'ko' };
+      return L[C.country] || (C.cur === 'KRW' ? 'ko' : 'en');
+    },
+    // 한국어 → 현지어 (이 기기에 기억). 키 번역이 안 되면 무료 번역 주소로
+    async toLocal(q, lang) {
+      let M = {}; try { M = JSON.parse(localStorage.getItem('yh-qtr') || '{}'); } catch (_) {}
+      const k = lang + '|' + q; if (M[k] !== undefined) return M[k];
+      let out = '';
+      const key = window.GTRANS_KEY || window.GMAPS_KEY;
+      try { if (key) { const r = await fetch('https://translation.googleapis.com/language/translate/v2?key=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q, source: 'ko', target: lang, format: 'text' }) }); const j = await r.json(); out = (j && j.data && j.data.translations && j.data.translations[0] && j.data.translations[0].translatedText) || ''; } } catch (_) {}
+      if (!out) { try { const r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=' + encodeURIComponent(lang) + '&dt=t&q=' + encodeURIComponent(q)); const j = await r.json(); out = ((j && j[0]) || []).map((x) => (x && x[0]) || '').join('').trim(); } catch (_) {} }
+      out = (out || '').trim();
+      if (out) { M[k] = out; const ks = Object.keys(M); if (ks.length > 300) delete M[ks[0]]; try { localStorage.setItem('yh-qtr', JSON.stringify(M)); } catch (_) {} }
+      return out;
+    },
     async _searchPlaces(q, city, onMore) {
       const { Place } = await this.gPlaces();
       const C = this.cityInfo(city);
       const run = async (text, bias) => {
-        const req = { textQuery: text, fields: ['id', 'displayName', 'formattedAddress', 'location', 'types', 'primaryType', 'rating', 'userRatingCount', 'photos'], language: 'ko', maxResultCount: 8 };
+        const req = { textQuery: text, fields: ['id', 'displayName', 'formattedAddress', 'location', 'types', 'primaryType', 'rating', 'userRatingCount', 'photos'], language: 'ko', maxResultCount: 15 };
         if (bias) req.locationBias = { lat: bias.center[0], lng: bias.center[1] };
         const { places } = await Place.searchByText(req);
         return (places || []).map((p) => { try { const ph = p.photos && p.photos[0]; const k = (city || '') + '|' + p.displayName; if (ph && !GPH[k]) GPH[k] = ph.getURI({ maxWidth: 240, maxHeight: 240 }); } catch (e) {}
@@ -606,9 +624,19 @@
       // 여행 도시 결과를 먼저, 적게 나오면 도시 제한 없이 한 번 더 찾아 뒤에 붙임 (인천공항처럼 다른 나라 장소)
       const inCity = !!city && !q.includes(city);
       const first = await run(inCity ? q + ' ' + city : q, C);
-      if (!inCity || first.length >= 4) return first;
-      if (!first.length) { const more = await run(q, null).catch(() => []); return more; }
-      run(q, null).then((more) => { const add = more.filter((m) => !first.some((f) => f.place_id === m.place_id)); if (add.length && onMore) onMore(first.concat(add)); }).catch(() => {});
+      // 한국어 검색어는 그 나라 말로도 한 번 더 찾음 (당고 → 団子). 구글 지도 앱처럼 현지 이름 가게가 나오게
+      const lang = this.qLang(C), isKo = /[가-힣]/.test(q);
+      const needTr = inCity && isKo && lang && lang !== 'ko' && first.length < 10;
+      if (!needTr && (!inCity || first.length >= 4)) return first;
+      const merge = (add) => first.concat(add.filter((m) => !first.some((f) => f.place_id === m.place_id)));
+      const more = (async () => {
+        let add = [];
+        if (needTr) { const tq = await this.toLocal(q, lang).catch(() => ''); if (tq && tq.toLowerCase() !== q.toLowerCase()) add = await run(tq, C).catch(() => []); }
+        if (!first.length && !add.length) add = await run(q, null).catch(() => []);
+        return add;
+      })();
+      if (!first.length) return more;
+      more.then((add) => { if (add.length && onMore) onMore(merge(add)); }).catch(() => {});
       return first;
     },
     // 추천·주변 검색: 결과 20곳까지. bounds(지도 영역) 또는 around([lat,lng], 반경m) 안에서
